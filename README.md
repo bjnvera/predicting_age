@@ -1,9 +1,8 @@
 ### Intro
-Repo used for developing code for AML project predicting age via MRI features
+Repo used for developing code for the AML project **Predicting age via MRI features**
 
 ### Setup
-It is recommended to
-- work in a virtual environment (venv)
+It is recommended, however optional, to work in a virtual environment (venv). 
    
 1. Update pip
 ```
@@ -24,7 +23,7 @@ Directories are used as follows
 - `src` contains the source code, possibly shared among multiple files and notebooks. 
 - On top level are scripts such as `src/print_hello_world`. One level below, in packages, files containing functionalities used among multiple scripts and notebooks, e.g. `/src/dummy/hello_world.py`.
 
-To run a script, go to `src/` and execute it the file with python, e.g. `python ./print_hello_world.py` 
+To run a script, go to `src/` and execute the file with python, e.g. `python ./print_hello_world.py` 
 
 ### Test the setup
 
