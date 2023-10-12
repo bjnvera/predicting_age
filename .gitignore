@@ -1,0 +1,29 @@
+#IDE
+.idea
+
+# pycache
+**/__pycache__
+
+
+# Distribution / packaging
+.Python
+**.eggs
+**.egg-info
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Environments
+venv/
+
+# Jupyter notebooks checkpoints
+**.ipynb_checkpoints
+notebooks/.ipynb_checkpoints
+
+# bmp images
+**/*.bmp
+notebooks/*.bmp
+
+# command collection
+commands/
