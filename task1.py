@@ -16,7 +16,14 @@ from sklearn.metrics import r2_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import RidgeCV
 from sklearn.linear_model import Ridge
-
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
+from sklearn.feature_selection import SelectPercentile
+import seaborn as sns
+from xgboost import XGBRegressor
+import random
+from hyperopt import STATUS_OK, Trials, fmin, hp, tpe
+from sklearn.metrics import mean_squared_error as rmse
 
 # Read data
 X_train_df = pd.read_csv('./X_train.csv', skiprows=1, header= None)
@@ -25,7 +32,7 @@ X_test_df = pd.read_csv('./X_test.csv', skiprows=1, header=None)
 
 X_train_input = X_train_df.values[:,1:]
 X_test_input = X_test_df.values[:,1:]
-y_train = y_train_df.values[:,1:]
+y_train_input = y_train_df.values[:,1:]
 
 
 #%% Missing data
@@ -45,6 +52,13 @@ X_test_complete = imputer.fit_transform(X_test_input)
 
 # Use Isolation Forest to identify the outliers
 
+
+pca = PCA(n_components=20)
+pca.fit(X_train_complete)
+X_train_pca = pca.transform(X_train_complete)
+
+plt.scatter(X_train_pca[:,0], X_train_pca[:,1])
+
 # Create an isolation forest model and fit it
 clf = IsolationForest()
 clf.fit(X_train_complete)
@@ -54,117 +68,139 @@ anomaly_scores = clf.decision_function(X_train_complete)
 sorted_anomaly_scores = np.sort(anomaly_scores)
 
 # Determine a threshold (xth precentil) -> vary to find best threshold
-threshold = np.percentile(sorted_anomaly_scores, 5)
+threshold = np.percentile(sorted_anomaly_scores, 10)
 
 # Classify samples as outleiers (1) or inliners (-1)
 outlier_prediction = np.where(anomaly_scores < threshold, 1, -1)
 
-# outlier_mask = outlier_prediction == 1
-# X_train_no_outliers = X_train_complete[~outlier_mask]
-# y_train_no_outliers = y_train[~outlier_mask]
-#!!! need to handle outliers
+outlier_mask = outlier_prediction == 1
+X_train_no_outliers = X_train_complete[~outlier_mask]
+y_train_no_outliers = y_train_input[~outlier_mask]
 
 # Count the number of outliers
 n_outliers = np.sum(outlier_prediction == 1)
 
 print("Number of outliers", n_outliers)
 print("Number of rows before:", X_train_complete.shape)
-# print("Number of rows after:", X_train_no_outliers.shape)
+print("Number of rows after:", X_train_no_outliers.shape)
+
+
+# Plot after outlier removal
+pca.fit(X_train_no_outliers)
+X_pca = pca.transform(X_train_no_outliers)
+plt.scatter(X_pca[:,0], X_pca[:,1])
+
 
 #%% Feature selection
 
 # First attempt is a correlation analysis
 
+feature_analysis = XGBRegressor()
+
+feature_analysis.fit(X_train_no_outliers, y_train_no_outliers)
+
+importance = feature_analysis.get_booster().get_score(importance_type='weight')
+
+importance_reduced = dict((k,v) for k, v in importance.items() if v >= 10)
+
+importance_drop = dict((k,v) for k, v in importance.items() if v < 10)
+
+list_imp = list(importance_drop.keys())
 
 # Create data frame from the float matrix
-X_train_df_corr = pd.DataFrame(X_train_complete)
+X_train_df_corr = pd.DataFrame(X_train_no_outliers)
+
+for i in range(0, len(importance_drop)):
+    list_imp[i] = int(list_imp[i][1:])
+
+    
+X_train_df_corr = X_train_df_corr.drop(list_imp, axis = 1)
+print(X_train_df_corr.shape)
+
+
+    
+#%%
+# Create data frame from the float matrix
+# X_train_df_corr = pd.DataFrame(X_train_no_outliers)
 
 # Calculate the correlation matrix
 correlation_matrix = X_train_df_corr.corr()
 
-# Set a threshold for high correlation
-correlation_threshold = 0.7
 
-# Create a list to store highly correlated feature pairs
-correlated_pairs = []
-
-# Loop through the upper triangular part of correlation matrix
-for i in range(len(correlation_matrix.columns)):
-    for j in range(i+1, len(correlation_matrix.columns)):
-        if abs(correlation_matrix.iloc[i,j]) >= correlation_threshold:
-            feature1 = correlation_matrix.columns[i]
-            feature2 = correlation_matrix.columns[j]
-            correlation_value = correlation_matrix.iloc[i,j]
-            correlated_pairs.append((feature1, feature2, correlation_value))
-
-# Sort highly correlated pairs
-correlated_pairs.sort(key=lambda x: abs(x[2]), reverse=True)
-
-# print("Feature Pairs with high correlation:")
-# for pair in correlated_pairs:
-#     print(f"{pair[0]} and {pair[1]} (Correlation: {pair[2]})")
-
-# Remove one feature from each highly correlated pair
-for pair in correlated_pairs:
-    if pair[0] in X_train_df_corr.columns:
-        X_train_df_corr.drop(pair[0], axis=1, inplace=True)
+X_train_new = X_train_df_corr.values[:,1:]
+y_train = y_train_no_outliers
+        
+# X_train_new = SelectPercentile(percentile=70).fit_transform(X_train, y_train)
 
 #%% Regression
 
-X_train = X_train_df_corr.values[:,1:]
-# y_train = y_train_no_outliers
+X_train = X_train_new
+y_train = y_train_no_outliers
 # X_test = X_test_df_corr.values[:,1:]
+print("Number of rows after:", X_train.shape)
+
 
 # Split the data into training and validation sets
-X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=42)
-
-#%% Lasso
-# Scale
-# scaler =StandardScaler()
-# X_train = scaler.fit_transform(X_train)
-
-# Use Lasso Regression with alpha as regularization strength
-# alphas = [10, 20, 30]
-
-# lasso_cv_model = LassoCV(alphas=alphas, cv=10)
-# lasso_cv_model.fit(X_train, y_train)
-
-# optimal_alpha = lasso_cv_model.alpha_
+X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=50)
 
 
-# print("Optimal Alpha: ", optimal_alpha)
+#%% XGBoost
 
-# lasso_model = Lasso(alpha=optimal_alpha)
-# lasso_model.fit(X_train, y_train)
+xgb_params = {'n_estimators': 1000,
+                'learning_rate': hp.uniform('learning_rate',0.01,0.1),
+                'subsample': hp.uniform('subsample', 0.05, 0.7),
+                'colsample_bytree': hp.uniform('colsample_bytree', 0.1, 0.5),
+                'max_depth': hp.randint('max_depth', 3),
+              'reg_lambda': hp.uniform('reg_lambda', 20, 60),
+              'reg_alpha': hp.uniform('reg_alpha', 20, 60)
+              }
 
-# y_train_pred = lasso_model.predict(X_train)
-# y_val_pred = lasso_model.predict(X_val)
+# xgb_params = {
+#                 'learning_rate': np.linspace(0.01, 0.1, 10),
+#                 'subsample': np.linspace(0.05, 0.45, 10),
+#                 'colsample_bytree': np.linspace(0.1, 1, 10).astype(float),
+#                 'max_depth': [1, 2],
+#                 'reg_lambda': np.linspace(1, 50, 50),
+#               'reg_alpha': np.linspace(1, 50, 500),
+#               }
 
-# train_score = r2_score(y_train, y_train_pred)
-# val_score = r2_score(y_val, y_val_pred)
+r2_scores = [0,0]
 
-# print("Train score: ", train_score)
-# print("Validation score: ", val_score)
+def objective(xgb_params):
+    model_XGB = XGBRegressor(objective= 'reg:squarederror',
+                         n_estimators = 100,
+                         learning_rate= xgb_params['learning_rate'],
+                         subsample = xgb_params['subsample'],
+                         colsample_bytree = xgb_params['colsample_bytree'],
+                         grow_policy = 'lossguide',
+                         max_depth = xgb_params['max_depth'],
+                         booster = 'gbtree',
+                         reg_lambda = xgb_params['reg_lambda'],
+                         reg_alpha = xgb_params['reg_alpha'],
+                         random_state = 42
+                         )
+    model_XGB.fit(X_train, y_train)
 
-#%% Ridge
+    y_train_pred = model_XGB.predict(X_train)
+    y_val_pred = model_XGB.predict(X_val)
 
-alphas = [10, 20, 30]
-ridge_cv_model = RidgeCV(alphas=alphas, store_cv_values=True)
+    train_score = r2_score(y_train, y_train_pred)
+    val_score = r2_score(y_val, y_val_pred)
+    # rmse2 = rmse(y_val,y_val_pred)
+    r2_scores.append([val_score, train_score])
+    # print("Train score: ", round(train_score,3))
+    # print("Validation score: ", round(val_score,3))
+    return -val_score
 
-ridge_cv_model.fit(X_train, y_train)
+trials = Trials()
 
-optimal_alpha = ridge_cv_model.alpha_
+best_hp = fmin(fn = objective,
+               space = xgb_params,
+               algo = tpe.suggest,
+               max_evals= 100,
+               trials = trials)
+print("The best hyperparameters are : ","\n")
+print(best_hp)
 
-print("Optimal Alpha: ", optimal_alpha)
-
-ridge_model = Ridge(alpha = optimal_alpha)
-ridge_model.fit(X_train, y_train)
-
-y_train_pred = ridge_model.predict(X_train)
-y_val_pred = ridge_model.predict(X_val)
-
-train_score = r2_score(y_train, y_train_pred)
-val_score = r2_score(y_val, y_val_pred)
-
-print("Train score: ", train_score)
-print("Validation score: ", val_score)
+#%%
+objective(best_hp)
