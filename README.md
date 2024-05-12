@@ -1,32 +1,12 @@
-### Intro
-Repo used for developing code for the AML project **Predicting age via MRI features**
+# Intro
+Repo contains code for the project **Predicting age via MRI features** based on the course Advanced Machine Learning at ETH Zurich. 
+The goal is to predict the age of a person based on the MRI features. The data is very high-dimensional with 832 features and only 1212 samples.
+The final model included a robust scaling of the features, kNN-imputation of missing values, model-based variable selection and gradient boosting as a regression model. 
 
-### Setup
-It is recommended, however optional, to work in a virtual environment (venv). 
-   
-1. Update pip
-```
-python -m pip install --upgrade pip
-``` 
-
-2. Install dependencies given in 
-```
-python -m pip install -r requirements.txt
-``` 
-
-### Repo structure
+# Repo structure
 Directories are used as follows
 - `notebooks` contains jupyter notebooks
   - clear your output before committing
 - `data` contains the data used 
   - not included in VCS of git
 - `src` contains the source code, possibly shared among multiple files and notebooks. 
-- On top level are scripts such as `src/print_hello_world`. One level below, in packages, files containing functionalities used among multiple scripts and notebooks, e.g. `/src/dummy/hello_world.py`.
-
-To run a script, go to `src/` and execute the file with python, e.g. `python ./print_hello_world.py` 
-
-### Test the setup
-
-1. Run the script located in `./src/print_hello_world.py`
-2. Run successfully the jupyter notebook `./notebooks/hello_world.ipynb`
- 
